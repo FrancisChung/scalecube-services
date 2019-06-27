@@ -65,4 +65,7 @@ public interface GreetingService {
 
   @ServiceMethod
   Flux<GreetingResponse> greetingFluxEmpty(GreetingRequest request);
+
+  @ServiceMethod
+  Mono<String> justNever();
 }

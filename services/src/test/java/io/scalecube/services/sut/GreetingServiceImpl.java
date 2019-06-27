@@ -98,6 +98,11 @@ public final class GreetingServiceImpl implements GreetingService {
   }
 
   @Override
+  public Mono<String> justNever() {
+    return Mono.never();
+  }
+
+  @Override
   public Mono<ServiceMessage> greetingMessage(ServiceMessage request) {
     print("[greetingMessage] Hello... i am a service an just recived a message:" + request);
     GreetingResponse resp = new GreetingResponse(" hello to: " + request.data(), "1");

@@ -378,6 +378,19 @@ public class ServiceRemoteTest extends BaseTest {
         .verify(TIMEOUT);
   }
 
+  @Test
+  public void test_remote_mono_never() throws Exception {
+
+    GreetingService service = gateway.call().api(GreetingService.class);
+
+    // call the service.
+    service.justNever().subscribe();
+
+    System.out.println("test_remote_mono_never done.");
+
+    Thread.sleep(120000);
+  }
+
   private GreetingService createProxy() {
     return gateway.call().api(GreetingService.class); // create proxy for GreetingService API
   }
