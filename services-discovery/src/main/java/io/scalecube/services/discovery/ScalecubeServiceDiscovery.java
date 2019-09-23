@@ -9,14 +9,15 @@ import io.scalecube.cluster.membership.MembershipEvent;
 import io.scalecube.cluster.transport.api.Message;
 import io.scalecube.cluster.transport.api.MessageCodec;
 import io.scalecube.net.Address;
+import io.scalecube.services.PlatformContext;
 import io.scalecube.services.ServiceEndpoint;
 import io.scalecube.services.ServiceGroup;
 import io.scalecube.services.discovery.api.ServiceDiscovery;
 import io.scalecube.services.discovery.api.ServiceDiscoveryEvent;
+import io.scalecube.services.monitor.ServiceMonitorModel;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.management.ManagementFactory;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -29,9 +30,6 @@ import java.util.StringJoiner;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
-import javax.management.StandardMBean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.Exceptions;
@@ -48,6 +46,7 @@ public final class ScalecubeServiceDiscovery implements ServiceDiscovery {
       LoggerFactory.getLogger("io.scalecube.services.discovery.ServiceGroupDiscovery");
 
   private final ServiceEndpoint serviceEndpoint;
+  private final ServiceMonitorModel.Builder monitorModelBuilder;
 
   private ClusterConfig clusterConfig;
 
@@ -66,7 +65,31 @@ public final class ScalecubeServiceDiscovery implements ServiceDiscovery {
    */
   public ScalecubeServiceDiscovery(ServiceEndpoint serviceEndpoint) {
     this.serviceEndpoint = serviceEndpoint;
+    this.monitorModelBuilder = new ServiceMonitorModel.Builder(); // assign to be not null
+    init();
+  }
 
+  public ScalecubeServiceDiscovery(PlatformContext platformContext) {
+    this.serviceEndpoint = platformContext.serviceEndpoint();
+    this.monitorModelBuilder = platformContext.monitorModelBuilder();
+    init();
+  }
+
+  /**
+   * Copy constructor.
+   *
+   * @param other other instance
+   */
+  private ScalecubeServiceDiscovery(ScalecubeServiceDiscovery other) {
+    this.serviceEndpoint = other.serviceEndpoint;
+    this.clusterConfig = other.clusterConfig;
+    this.cluster = other.cluster;
+    this.groups = other.groups;
+    this.addedGroups = other.addedGroups;
+    this.monitorModelBuilder = other.monitorModelBuilder;
+  }
+
+  private void init() {
     // Add myself to the group if 'groupness' is defined
     ServiceGroup serviceGroup = serviceEndpoint.serviceGroup();
     if (serviceGroup != null) {
@@ -82,19 +105,6 @@ public final class ScalecubeServiceDiscovery implements ServiceDiscovery {
             .transport(config -> config.messageCodec(new MessageCodecImpl()))
             .metadataEncoder(this::encode)
             .metadataDecoder(this::decode);
-  }
-
-  /**
-   * Copy constructor.
-   *
-   * @param other other instance
-   */
-  private ScalecubeServiceDiscovery(ScalecubeServiceDiscovery other) {
-    this.serviceEndpoint = other.serviceEndpoint;
-    this.clusterConfig = other.clusterConfig;
-    this.cluster = other.cluster;
-    this.groups = other.groups;
-    this.addedGroups = other.addedGroups;
   }
 
   /**
@@ -385,60 +395,38 @@ public final class ScalecubeServiceDiscovery implements ServiceDiscovery {
     }
   }
 
-  public interface MonitorMBean {
-
-    Collection<String> getServiceGroup();
-
-    String getServiceGroupAsString();
-
-    Collection<String> getAddedGroups();
-
-    String getAddedGroupsAsString();
-
-    Collection<String> getServiceGroups();
-
-    String getServiceGroupsAsString();
-
-    Collection<String> getRecentServiceDiscoveryEvents();
-
-    String getRecentServiceDiscoveryEventsAsString();
-
-    Collection<String> getServiceDiscovery();
-
-    String getServiceDiscoveryAsString();
-  }
-
-  private static class JmxMonitorMBean implements MonitorMBean {
+  private static class JmxMonitorMBean {
 
     public static final int MAX_CACHE_SIZE = 128;
 
     private final ScalecubeServiceDiscovery discovery;
-    private final List<ServiceDiscoveryEvent> recentServiceDiscoveryEvents;
+    private final List<ServiceDiscoveryEvent> recentDiscoveryEvents;
 
     private JmxMonitorMBean(ScalecubeServiceDiscovery discovery) {
       this.discovery = discovery;
-      this.recentServiceDiscoveryEvents = new CopyOnWriteArrayList<>();
+      this.recentDiscoveryEvents = new CopyOnWriteArrayList<>();
       discovery
           .listenDiscovery()
           .subscribe(
               event -> {
-                recentServiceDiscoveryEvents.add(event);
-                if (recentServiceDiscoveryEvents.size() > MAX_CACHE_SIZE) {
-                  recentServiceDiscoveryEvents.remove(0);
+                recentDiscoveryEvents.add(event);
+                if (recentDiscoveryEvents.size() > MAX_CACHE_SIZE) {
+                  recentDiscoveryEvents.remove(0);
                 }
               });
     }
 
-    private static JmxMonitorMBean start(ScalecubeServiceDiscovery instance) throws Exception {
-      MBeanServer mbeanServer = ManagementFactory.getPlatformMBeanServer();
-      JmxMonitorMBean jmxMBean = new JmxMonitorMBean(instance);
-      String id = instance.serviceEndpoint.id();
-      ObjectName objectName =
-          new ObjectName("io.scalecube.services:name=ScalecubeServiceDiscovery@" + id);
-      StandardMBean standardMBean = new StandardMBean(jmxMBean, MonitorMBean.class);
-      mbeanServer.registerMBean(standardMBean, objectName);
-      return jmxMBean;
-    }
+    //    private static JmxMonitorMBean start(ScalecubeServiceDiscovery instance) throws Exception
+    // {
+    //      MBeanServer mbeanServer = ManagementFactory.getPlatformMBeanServer();
+    //      JmxMonitorMBean jmxMBean = new JmxMonitorMBean(instance);
+    //      String id = instance.serviceEndpoint.id();
+    //      ObjectName objectName =
+    //          new ObjectName("io.scalecube.services:name=ScalecubeServiceDiscovery@" + id);
+    //      StandardMBean standardMBean = new StandardMBean(jmxMBean, MonitorMBean.class);
+    //      mbeanServer.registerMBean(standardMBean, objectName);
+    //      return jmxMBean;
+    //    }
 
     @Override
     public Collection<String> getServiceGroup() {
@@ -488,16 +476,15 @@ public final class ScalecubeServiceDiscovery implements ServiceDiscovery {
       return getServiceGroups().stream().collect(Collectors.joining(",", "[", "]"));
     }
 
-    @Override
-    public Collection<String> getRecentServiceDiscoveryEvents() {
-      return recentServiceDiscoveryEvents.stream()
+    public Collection<String> getRecentDiscoveryEvents() {
+      return recentDiscoveryEvents.stream()
           .map(ServiceDiscoveryEvent::toString)
           .collect(Collectors.toList());
     }
 
     @Override
     public String getRecentServiceDiscoveryEventsAsString() {
-      return getRecentServiceDiscoveryEvents().stream().collect(Collectors.joining(",", "[", "]"));
+      return getRecentDiscoveryEvents().stream().collect(Collectors.joining(",", "[", "]"));
     }
 
     @Override

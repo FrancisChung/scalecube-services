@@ -661,46 +661,19 @@ public class Microservices {
     }
   }
 
-  public interface MonitorMBean {
-
-    Collection<String> getInstanceId();
-
-    String getInstanceIdAsString();
-
-    Collection<String> getDiscoveryAddress();
-
-    String getDiscoveryAddressAsString();
-
-    Collection<String> getGatewayAddresses();
-
-    String getGatewayAddressesAsString();
-
-    Collection<String> getServiceEndpoint();
-
-    String getServiceEndpointAsString();
-
-    Collection<String> getServiceEndpoints();
-
-    String getServiceEndpointsAsString();
-
-    Collection<String> getServiceMethodInvokers();
-
-    String getServiceMethodInvokersAsString();
-  }
-
-  private static class JmxMonitorMBean implements MonitorMBean {
+  private static class JmxMonitorMBean {
 
     private final Microservices microservices;
 
-    private static JmxMonitorMBean start(Microservices instance) throws Exception {
-      MBeanServer mbeanServer = ManagementFactory.getPlatformMBeanServer();
-      JmxMonitorMBean jmxMBean = new JmxMonitorMBean(instance);
-      ObjectName objectName =
-          new ObjectName("io.scalecube.services:name=Microservices@" + instance.id);
-      StandardMBean standardMBean = new StandardMBean(jmxMBean, MonitorMBean.class);
-      mbeanServer.registerMBean(standardMBean, objectName);
-      return jmxMBean;
-    }
+//    private static JmxMonitorMBean start(Microservices instance) throws Exception {
+//      MBeanServer mbeanServer = ManagementFactory.getPlatformMBeanServer();
+//      JmxMonitorMBean jmxMBean = new JmxMonitorMBean(instance);
+//      ObjectName objectName =
+//          new ObjectName("io.scalecube.services:name=Microservices@" + instance.id);
+//      StandardMBean standardMBean = new StandardMBean(jmxMBean, MonitorMBean.class);
+//      mbeanServer.registerMBean(standardMBean, objectName);
+//      return jmxMBean;
+//    }
 
     private JmxMonitorMBean(Microservices microservices) {
       this.microservices = microservices;
